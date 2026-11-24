@@ -7,7 +7,7 @@ namespace BotCripto.Strategies;
 //  2) pullback: nelle ultime candele il minimo ha toccato la zona EMA20/EMA50 e la candela chiude di nuovo sopra EMA20
 //  3) ripartenza: candela rialzista, RSI14 in recupero (>45, in crescita) e non ipercomprato
 //  4) filtro di mercato: FTSE MIB sopra la sua EMA50
-//  5) forza relativa: il titolo deve aver battuto il FTSE MIB sul periodo
+//  5) forza relativa vs FTSE MIB: opzionale, spenta di default (BOT18_RS_ENABLED=1 per attivarla)
 // Stop loss sotto il minimo dello swing recente (meno un buffer ATR); il target lo calcola il RiskManager (R:R configurato).
 public class PositionTradingStrategy
 {
@@ -24,7 +24,7 @@ public class PositionTradingStrategy
     private static readonly int PullbackLookback = (int)P("PULLBACK_LOOKBACK", 5);   // candele entro cui deve essere avvenuto il pullback
     private static readonly int SwingLookback = (int)P("SWING_LOOKBACK", 10);        // candele per il minimo dello swing (stop)
     private const int AtrPeriod = 14;
-    private static readonly decimal AtrStopBuffer = P("ATR_BUFFER", 1.5m);           // buffer sotto lo swing, in ATR
+    private static readonly decimal AtrStopBuffer = P("ATR_BUFFER", 2m);             // buffer sotto lo swing, in ATR (ottimizzato in backtest 8 anni)
     private static readonly decimal RsiMin = P("RSI_MIN", 45m);
     private static readonly decimal RsiMax = P("RSI_MAX", 65m);
     private static readonly decimal MaxStopPercent = P("MAX_STOP", 0.15m);           // stop più largo = setup scartato
@@ -35,7 +35,7 @@ public class PositionTradingStrategy
     public static bool AllowShort { get; set; } = Environment.GetEnvironmentVariable("BOT18_SHORTS") == "1";
 
     // Filtro forza relativa: long solo se il titolo ha battuto il FTSE MIB di almeno RsMin sul periodo, short solo se ha fatto peggio.
-    private static readonly bool RsEnabled = P("RS_ENABLED", 1m) == 1m;
+    private static readonly bool RsEnabled = P("RS_ENABLED", 0m) == 1m; // spento di default: in backtest 8 anni rende di più senza
     private static readonly decimal RsMin = P("RS_MIN", 0m);
     public static readonly int RsPeriod = (int)P("RS_DAYS", 60);   // candele su cui si misura la forza relativa
     public static readonly bool RsSort = P("RS_SORT", 1m) == 1m;   // a parità di segnale entrano prima i più forti (long) / più deboli (short)
