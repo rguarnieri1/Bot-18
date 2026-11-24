@@ -43,10 +43,47 @@ public class PositionTradingStrategy
     // Regime di mercato: true se il FTSE MIB chiude sopra la sua EMA50 sull'ultima candela, false se sotto, null se dati insufficienti.
     public static bool? IsMarketBullish(List<Candle> marketCandles)
     {
-        var ema = TechnicalIndicators.CalculateEMA(marketCandles.Select(c => c.Close).ToList(), MarketRegimeEmaPeriod);
+        var closes = marketCandles.Select(c => c.Close).ToList();
+        var ema = TechnicalIndicators.CalculateEMA(closes, MarketRegimeEmaPeriod);
         if (ema.Count == 0)
             return null;
-        return marketCandles.Last().Close > ema.Last();
+        if (closes.Last() <= ema.Last())
+            return false;
+        return IsCrash(closes) ? false : true;
+    }
+
+    // Filtro crollo del mercato (tutti disattivati di default; BOT18_CRASH_*):
+    //  - drawdown: il FTSE MIB è sceso più di CRASH_DD (es. 0,08 = 8%) dal massimo delle ultime CRASH_LOOKBACK sedute
+    //  - slope: la EMA200 del FTSE MIB è più bassa di 20 sedute fa
+    //  - cross: la EMA50 del FTSE MIB è sotto la EMA200
+    private static readonly decimal CrashDrawdown = P("CRASH_DD", 0m);
+    private static readonly int CrashLookback = (int)P("CRASH_LOOKBACK", 120);
+    private static readonly bool CrashSlope = P("CRASH_SLOPE", 0m) == 1m;
+    private static readonly bool CrashCross = P("CRASH_CROSS", 0m) == 1m;
+
+    private static bool IsCrash(List<decimal> closes)
+    {
+        if (CrashDrawdown > 0 && closes.Count >= 2)
+        {
+            var high = closes.Skip(Math.Max(0, closes.Count - CrashLookback)).Max();
+            if (closes.Last() < high * (1m - CrashDrawdown))
+                return true;
+        }
+        if (CrashSlope || CrashCross)
+        {
+            var e200 = TechnicalIndicators.CalculateEMA(closes, SlowEma);
+            if (e200.Count == 0)
+                return false; // storico insufficiente per questo filtro: non blocca
+            if (CrashSlope && e200.Count > 20 && e200.Last() < e200[e200.Count - 21])
+                return true;
+            if (CrashCross)
+            {
+                var e50 = TechnicalIndicators.CalculateEMA(closes, MidEma);
+                if (e50.Count > 0 && e50.Last() < e200.Last())
+                    return true;
+            }
+        }
+        return false;
     }
 
     // Forza relativa = rendimento del titolo meno rendimento del FTSE MIB sulle ultime RsPeriod candele (allineate per data).
